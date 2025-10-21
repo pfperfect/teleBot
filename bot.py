@@ -73,26 +73,42 @@ async def allrefs(message: types.Message):
 async def find_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return await message.answer("You’re not authorized 😎")
-    
+
     try:
-        _, username_to_find = message.text.split(maxsplit=1)
-        c.execute("SELECT user_id, username, referred_by FROM users WHERE username=?", (username_to_find,))
-        user = c.fetchone()
-        if not user:
-            await message.answer(f"No user found with username: {username_to_find}")
-        else:
-            # Get referrer's username if possible
-            ref_id = user[2]
-            ref_username = "Unknown"
-            if ref_id:
-                c.execute("SELECT username FROM users WHERE user_id=?", (ref_id,))
-                ref = c.fetchone()
-                if ref:
-                    ref_username = ref[0]
-            await message.answer(f"User {user[1]} (ID: {user[0]}) was invited by {ref_username} (ID: {ref_id})")
-    except:
-        await message.answer("Usage: /find <username>")
+        _, query = message.text.split(maxsplit=1)
+    except ValueError:
+        return await message.answer("Usage: /find <username or user_id>")
+
+    # Check if query is a number (user_id)
+    if query.isdigit():
+        c.execute("SELECT user_id, username, referred_by FROM users WHERE user_id=?", (int(query),))
+    else:
+        # Make sure the username starts with @ (optional)
+        if query.startswith("@"):
+            query = query[1:]
+        c.execute("SELECT user_id, username, referred_by FROM users WHERE username=?", (query,))
+    
+    user = c.fetchone()
+    if not user:
+        return await message.answer(f"No user found with: {query}")
+
+    # Get referrer's username if possible
+    ref_id = user[2]
+    ref_username = "Unknown"
+    if ref_id:
+        c.execute("SELECT username FROM users WHERE user_id=?", (ref_id,))
+        ref = c.fetchone()
+        if ref:
+            ref_username = ref[0]
+
+    await message.answer(
+        f"👤 User: @{user[1] or 'NoUsername'}\n"
+        f"🆔 ID: {user[0]}\n"
+        f"🔗 Invited by: @{ref_username or 'Unknown'} (ID: {ref_id or 'N/A'})"
+    )
+
 
 
 if __name__ == "__main__":
+
     executor.start_polling(dp, skip_updates=True)
